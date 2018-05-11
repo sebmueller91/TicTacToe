@@ -24,9 +24,10 @@ namespace TicTacToe
     {
         private const State AI = State.Circle;
 
-        private State[,] States { get; set; }
-        private Random rand = new Random();
+        private State[,] States { get; set; }        
         public Button[,] Buttons { get; set; }
+
+        private static Random rand;
 
         private State m_NextMove;
         private State NextMove
@@ -40,7 +41,7 @@ namespace TicTacToe
                 if (value != m_NextMove)
                 {
                     m_NextMove = value;
-                    if (m_NextMove == AI && GetWinner() == State.Empty)
+                    if (m_NextMove == AI && GetWinner(States) == State.Empty)
                     {
                         DoAIMove();
                     }
@@ -55,10 +56,20 @@ namespace TicTacToe
             Initialize();
         }
 
+        public void OnKeyDownHandler(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.R)
+            {
+                Reset();                
+            }
+        }
+
         private void Initialize()
         {
+            rand = new Random();
+
             Buttons = new Button[MyGrid.Rows, MyGrid.Columns];
-            States = new State[MyGrid.Rows, MyGrid.Columns];            
+            States = new State[MyGrid.Rows, MyGrid.Columns];
 
             for (int i = 0; i < MyGrid.Rows; i++)
             {
@@ -86,8 +97,26 @@ namespace TicTacToe
                 }
             }
 
-            NextMove = State.Cross; // Cross begins
-            //NextMove = (rand.Next(0, 1) == 0) ? State.Circle : State.Cross;
+            //NextMove = State.Circle; // Cross begins
+            NextMove = (rand.Next(0, 2) == 0) ? State.Circle : State.Cross;
+        }
+
+        private void Reset()
+        {
+            foreach (var button in Buttons)
+            {
+                button.Content = "";
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    States[i,j] = State.Empty;
+                }
+            }
+
+            NextMove = (rand.Next(0, 2) == 0) ? State.Circle : State.Cross;
         }
 
         private void Button_Click(object sender, RoutedEventArgs e)
@@ -97,40 +126,37 @@ namespace TicTacToe
             int row = buttonNo / 3;
             int col = buttonNo % 3;
 
-            if (States[row, col] == State.Empty && GetWinner() == State.Empty)
+            if (States[row, col] == State.Empty && GetWinner(States) == State.Empty)
             {
                 SetButtonState(row, col, NextMove);
-
             }
         }
 
-        private State GetWinner()
+        private State GetWinner(State[,] field)
         {
-            State[] curStates = new State[8];
-
             for (int i = 0; i < 3; i++)
             {
                 // Check horizontal lines
-                if ((States[i, 0] == States[i, 1] && States[i, 0] == States[i, 2]) && States[i, 0] != State.Empty)
+                if ((field[i, 0] == field[i, 1] && field[i, 0] == field[i, 2]) && field[i, 0] != State.Empty)
                 {
-                    return States[i, 0];
+                    return field[i, 0];
                 }
 
                 // Check vertical lines
-                if ((States[0, i] == States[1, i] && States[0, i] == States[2, i]) && States[0, i] != State.Empty)
+                if ((field[0, i] == field[1, i] && field[0, i] == field[2, i]) && field[0, i] != State.Empty)
                 {
-                    return States[i, 0];
+                    return field[i, 0];
                 }
             }
 
             // Check diagonal lines
-            if ((States[0, 0] == States[1, 1] && States[0, 0] == States[2, 2]) && States[0, 0] != State.Empty)
+            if ((field[0, 0] == field[1, 1] && field[0, 0] == field[2, 2]) && field[0, 0] != State.Empty)
             {
-                return States[0, 0];
+                return field[0, 0];
             }
-            if ((States[2, 0] == States[1, 1] && States[2, 0] == States[0, 2]) && States[2, 0] != State.Empty)
+            if ((field[2, 0] == field[1, 1] && field[2, 0] == field[0, 2]) && field[2, 0] != State.Empty)
             {
-                return States[2, 0];
+                return field[2, 0];
             }
 
             return State.Empty; // No winner
@@ -140,12 +166,12 @@ namespace TicTacToe
         {
             if (state == State.Circle)
             {
-                Buttons[row, col].Content = "o";
+                Buttons[row, col].Content = "\u25CB";
                 Buttons[row, col].Foreground = Brushes.Red;
             }
             else
             {
-                Buttons[row, col].Content = "x";
+                Buttons[row, col].Content = "\uD83D\uDFA8";
                 Buttons[row, col].Foreground = Brushes.Blue;
             }
 
@@ -212,7 +238,7 @@ namespace TicTacToe
 
         private int Minimax(State[,] curStates, State curPlayer, out int row, out int col)
         {
-            if (GetNumberOfMoves(curStates) == 9)
+            if (GetNumberOfMoves(curStates) == 9 || GetWinner(curStates) != State.Empty)
             {
                 row = -1;
                 col = -1;
@@ -232,7 +258,8 @@ namespace TicTacToe
 
                 if (curPlayer == AI) // Maximize
                 {
-                    int rMax = int.MinValue, rowMax = -1, colMax = -1;
+                    int rMax = int.MinValue;
+                    List<int> cells = new List<int>();
                     foreach (var cell in possibleCells)
                     {
                         int curRow = cell / 3;
@@ -247,17 +274,22 @@ namespace TicTacToe
                         if (r > rMax)
                         {
                             rMax = r;
-                            rowMax = curRow;
-                            colMax = curCol;
+                            cells.Clear();
+                            cells.Add(curRow * 3 + curCol);
+                        }
+                        else if (r == rMax)
+                        {
+                            cells.Add(curRow * 3 + curCol);
                         }
                     }
-                    row = rowMax;
-                    col = colMax;
+
+                    GetRandomCell(cells, out row, out col);
                     return rMax;
                 }
                 else // Minimize
                 {
-                    int rMin = int.MaxValue, rowMin = -1, colMin = -1;
+                    int rMin = int.MaxValue;
+                    List<int> cells = new List<int>();
                     foreach (var cell in possibleCells)
                     {
                         int curRow = cell / 3;
@@ -272,13 +304,16 @@ namespace TicTacToe
                         if (r < rMin)
                         {
                             rMin = r;
-                            rowMin = curRow;
-                            colMin = curCol;
+                            cells.Clear();
+                            cells.Add(curRow * 3 + curCol);
+                        }
+                        else if (r == rMin)
+                        {
+                            cells.Add(curRow * 3 + curCol);
                         }
                     }
 
-                    row = rowMin;
-                    col = colMin;
+                    GetRandomCell(cells, out row, out col);
                     return rMin;
                 }
             }
@@ -316,17 +351,21 @@ namespace TicTacToe
             {
                 return 100;
             }
-            else if (ai_score == 2)
+            /*else if (ai_score == 2)
             {
                 return 10;
-            }
+            }*/
             else if (op_score == 3)
             {
                 return -100;
             }
-            else
+            /*else if (op_score == 2)
             {
                 return -10;
+            }*/
+            else
+            {
+                return 0;
             }
         }
         #endregion Minimax Stategy
@@ -377,7 +416,7 @@ namespace TicTacToe
             }
             else
             {
-                int randPos = rand.Next(0, cells.Count - 1);
+                int randPos = rand.Next(0, cells.Count);
                 row = cells[randPos] / 3;
                 col = cells[randPos] % 3;
             }
